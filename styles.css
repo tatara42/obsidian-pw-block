@@ -73,11 +73,19 @@
   padding: 3px 6px;
   cursor: pointer;
   color: var(--text-muted);
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .password-codeblock-btn:hover {
   color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+.password-codeblock-btn.is-holding {
+  color: var(--interactive-accent);
   background-color: var(--background-modifier-hover);
 }
 
@@ -104,20 +112,14 @@
   user-select: text;
 }
 
-/* Masking in Reading View */
+/* Masking in Reading View - Always masked by default */
 .password-codeblock-code.is-masked {
   -webkit-text-security: disc;
   letter-spacing: 0.12em;
-  transition: -webkit-text-security 0.15s ease, letter-spacing 0.15s ease;
+  transition: -webkit-text-security 0.1s ease, letter-spacing 0.1s ease;
 }
 
-/* Reveal on hover when enabled */
-body.pw-reveal-on-hover .password-codeblock-container.reveal-on-hover:hover .password-codeblock-code.is-masked {
-  -webkit-text-security: none;
-  letter-spacing: normal;
-}
-
-/* Explicitly unmasked via toggle button */
+/* Unmasked while holding the eye button */
 .password-codeblock-code.is-unmasked {
   -webkit-text-security: none !important;
   letter-spacing: normal !important;
@@ -130,12 +132,48 @@ body.pw-reveal-on-hover .password-codeblock-container.reveal-on-hover:hover .pas
   -webkit-text-security: disc;
   letter-spacing: 0.12em;
   user-select: text;
-  transition: -webkit-text-security 0.15s ease, letter-spacing 0.15s ease;
+  transition: -webkit-text-security 0.1s ease, letter-spacing 0.1s ease;
 }
 
-/* Reveal on hover in Edit mode */
-body.pw-reveal-on-hover .cm-password-masked:hover,
-body.pw-reveal-on-hover .cm-password-line:hover .cm-password-masked {
-  -webkit-text-security: none;
-  letter-spacing: normal;
+.cm-password-unmasked {
+  -webkit-text-security: none !important;
+  letter-spacing: normal !important;
+}
+
+/* Hold-to-see eye button on the ```pw fence line in Edit Mode */
+.cm-password-hold-eye-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 1px 5px;
+  margin-left: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  vertical-align: middle;
+  line-height: 1;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cm-password-hold-eye-btn:hover {
+  color: var(--text-normal);
+  border-color: var(--background-modifier-border-hover);
+  background-color: var(--background-modifier-hover);
+}
+
+.cm-password-hold-eye-btn.is-holding {
+  color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.cm-password-hold-eye-btn svg {
+  width: 13px;
+  height: 13px;
 }

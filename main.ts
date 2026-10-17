@@ -13,32 +13,111 @@ import {
 	EditorView,
 	ViewPlugin,
 	ViewUpdate,
+	WidgetType,
 } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect } from '@codemirror/state';
 
 export interface PasswordCodeBlockSettings {
 	enableReadingMask: boolean;
 	enableEditMask: boolean;
-	revealOnHover: boolean;
 	showCopyButton: boolean;
-	autoHideDelay: number;
-	// Backward compatibility with v1.0.0/1.0.1
+	// Backward compatibility
+	revealOnHover?: boolean;
+	autoHideDelay?: number;
 	enablePasswordMasking?: boolean;
 }
 
 export const DEFAULT_SETTINGS: PasswordCodeBlockSettings = {
 	enableReadingMask: true,
 	enableEditMask: true,
-	revealOnHover: true,
 	showCopyButton: true,
-	autoHideDelay: 5,
 };
 
 export const forceUpdateEffect = StateEffect.define<void>();
+export const setEditorUnmaskEffect = StateEffect.define<number | null>();
+
+class HoldEyeWidget extends WidgetType {
+	constructor(
+		readonly view: EditorView,
+		readonly blockStart: number,
+		readonly isHolding: boolean
+	) {
+		super();
+	}
+
+	eq(other: HoldEyeWidget): boolean {
+		return (
+			other.blockStart === this.blockStart &&
+			other.isHolding === this.isHolding
+		);
+	}
+
+	toDOM(): HTMLElement {
+		const btn = document.createElement('button');
+		btn.className = 'cm-password-hold-eye-btn';
+		if (this.isHolding) {
+			btn.classList.add('is-holding');
+			setIcon(btn, 'eye-off');
+			btn.setAttribute('aria-label', 'Release to hide password');
+			btn.setAttribute('title', 'Release to hide password');
+		} else {
+			setIcon(btn, 'eye');
+			btn.setAttribute('aria-label', 'Hold to see password');
+			btn.setAttribute('title', 'Hold to see password');
+		}
+
+		let holding = this.isHolding;
+
+		const startHold = (e: Event) => {
+			e.preventDefault();
+			e.stopPropagation();
+			if (holding) return;
+			holding = true;
+			this.view.dispatch({
+				effects: setEditorUnmaskEffect.of(this.blockStart),
+			});
+		};
+
+		const endHold = (e: Event) => {
+			e.preventDefault();
+			e.stopPropagation();
+			if (!holding) return;
+			holding = false;
+			this.view.dispatch({
+				effects: setEditorUnmaskEffect.of(null),
+			});
+		};
+
+		btn.addEventListener('pointerdown', startHold);
+		btn.addEventListener('pointerup', endHold);
+		btn.addEventListener('pointerleave', endHold);
+		btn.addEventListener('pointercancel', endHold);
+
+		btn.addEventListener('keydown', (e: KeyboardEvent) => {
+			if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+				startHold(e);
+			}
+		});
+		btn.addEventListener('keyup', (e: KeyboardEvent) => {
+			if (e.key === ' ' || e.key === 'Enter') {
+				endHold(e);
+			}
+		});
+		btn.addEventListener('blur', endHold);
+		btn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+		return btn;
+	}
+
+	ignoreEvent(): boolean {
+		return true;
+	}
+}
 
 function buildPasswordDecorations(
 	view: EditorView,
-	plugin: PasswordCodeBlockPlugin
+	plugin: PasswordCodeBlockPlugin,
+	unmaskedBlockStart: number | null
 ): DecorationSet {
 	if (!plugin.settings.enableEditMask) {
 		return Decoration.none;
@@ -49,7 +128,8 @@ function buildPasswordDecorations(
 	const regex = /^([ \t]*(`{3,}|~{3,}))[ \t]*(?:pw|password)\b[^\r\n]*\r?\n([\s\S]*?)(^\1[ \t]*$)/gim;
 
 	const lineDeco = Decoration.line({ class: 'cm-password-line' });
-	const markDeco = Decoration.mark({ class: 'cm-password-masked' });
+	const markDecoMasked = Decoration.mark({ class: 'cm-password-masked' });
+	const markDecoUnmasked = Decoration.mark({ class: 'cm-password-unmasked' });
 
 	const builder = new RangeSetBuilder<Decoration>();
 	let lastLineDecorated = -1;
@@ -72,25 +152,54 @@ function buildPasswordDecorations(
 
 		if (contentEnd <= contentStart) continue;
 
+		const isBlockUnmasked = unmaskedBlockStart === contentStart;
+		const openingFenceLine = doc.lineAt(fullStart);
+		let widgetAdded = false;
+
 		for (const range of view.visibleRanges) {
-			if (contentEnd < range.from || contentStart > range.to) {
+			if (fullEnd < range.from || fullStart > range.to) {
 				continue;
+			}
+
+			if (
+				!widgetAdded &&
+				openingFenceLine.from <= range.to &&
+				openingFenceLine.to >= range.from
+			) {
+				builder.add(
+					openingFenceLine.to,
+					openingFenceLine.to,
+					Decoration.widget({
+						widget: new HoldEyeWidget(
+							view,
+							contentStart,
+							isBlockUnmasked
+						),
+						side: 1,
+					})
+				);
+				widgetAdded = true;
 			}
 
 			const visibleStart = Math.max(contentStart, range.from);
 			const visibleEnd = Math.min(contentEnd, range.to);
 
-			const startLine = doc.lineAt(visibleStart);
-			const endLine = doc.lineAt(visibleEnd);
+			if (visibleStart <= visibleEnd) {
+				const startLine = doc.lineAt(visibleStart);
+				const endLine = doc.lineAt(visibleEnd);
+				const activeMark = isBlockUnmasked
+					? markDecoUnmasked
+					: markDecoMasked;
 
-			for (let lineNo = startLine.number; lineNo <= endLine.number; lineNo++) {
-				if (lineNo <= lastLineDecorated) continue;
-				lastLineDecorated = lineNo;
+				for (let lineNo = startLine.number; lineNo <= endLine.number; lineNo++) {
+					if (lineNo <= lastLineDecorated) continue;
+					lastLineDecorated = lineNo;
 
-				const line = doc.line(lineNo);
-				builder.add(line.from, line.from, lineDeco);
-				if (line.to > line.from) {
-					builder.add(line.from, line.to, markDeco);
+					const line = doc.line(lineNo);
+					builder.add(line.from, line.from, lineDeco);
+					if (line.to > line.from) {
+						builder.add(line.from, line.to, activeMark);
+					}
 				}
 			}
 		}
@@ -103,17 +212,37 @@ function createPasswordViewPlugin(plugin: PasswordCodeBlockPlugin) {
 	return ViewPlugin.fromClass(
 		class {
 			decorations: DecorationSet;
+			unmaskedBlockStart: number | null = null;
 
-			constructor(view: EditorView) {
-				this.decorations = buildPasswordDecorations(view, plugin);
+			constructor(readonly view: EditorView) {
+				this.decorations = buildPasswordDecorations(
+					view,
+					plugin,
+					this.unmaskedBlockStart
+				);
 			}
 
 			update(update: ViewUpdate) {
-				const hasForceUpdate = update.transactions.some((tr) =>
-					tr.effects.some((e) => e.is(forceUpdateEffect))
-				);
-				if (update.docChanged || update.viewportChanged || hasForceUpdate) {
-					this.decorations = buildPasswordDecorations(update.view, plugin);
+				let needsRebuild = update.docChanged || update.viewportChanged;
+
+				for (const tr of update.transactions) {
+					for (const effect of tr.effects) {
+						if (effect.is(setEditorUnmaskEffect)) {
+							this.unmaskedBlockStart = effect.value;
+							needsRebuild = true;
+						}
+						if (effect.is(forceUpdateEffect)) {
+							needsRebuild = true;
+						}
+					}
+				}
+
+				if (needsRebuild) {
+					this.decorations = buildPasswordDecorations(
+						update.view,
+						plugin,
+						this.unmaskedBlockStart
+					);
 				}
 			}
 		},
@@ -129,8 +258,6 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		document.body.toggleClass('pw-reveal-on-hover', this.settings.revealOnHover);
-
 		this.registerEditorExtension(createPasswordViewPlugin(this));
 
 		const renderBlock = (source: string, el: HTMLElement) => {
@@ -143,9 +270,7 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 		this.addSettingTab(new PasswordCodeBlockSettingTab(this.app, this));
 	}
 
-	onunload() {
-		document.body.removeClass('pw-reveal-on-hover');
-	}
+	onunload() {}
 
 	async loadSettings() {
 		const loadedData = await this.loadData();
@@ -162,7 +287,6 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 	}
 
 	applySettingsUpdate() {
-		document.body.toggleClass('pw-reveal-on-hover', this.settings.revealOnHover);
 		this.refreshActiveMarkdownView();
 		this.refreshEditorViews();
 	}
@@ -193,10 +317,6 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 			cls: 'password-codeblock-container',
 		});
 
-		if (this.settings.revealOnHover) {
-			container.addClass('reveal-on-hover');
-		}
-
 		const header = container.createDiv({ cls: 'password-codeblock-header' });
 
 		const label = header.createDiv({ cls: 'password-codeblock-label' });
@@ -206,9 +326,6 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 
 		const actions = header.createDiv({ cls: 'password-codeblock-actions' });
 
-		let isExplicitlyUnmasked = false;
-		let autoHideTimer: number | null = null;
-
 		const pre = container.createEl('pre', { cls: 'password-codeblock-pre' });
 		const code = pre.createEl('code', { cls: 'password-codeblock-code' });
 		if (this.settings.enableReadingMask) {
@@ -216,46 +333,76 @@ export default class PasswordCodeBlockPlugin extends Plugin {
 		}
 		code.setText(source.trimEnd());
 
-		const updateRevealState = (unmasked: boolean) => {
-			isExplicitlyUnmasked = unmasked;
-			if (autoHideTimer !== null) {
-				window.clearTimeout(autoHideTimer);
-				autoHideTimer = null;
-			}
+		let isHolding = false;
+		let safetyTimer: number | null = null;
 
-			if (isExplicitlyUnmasked) {
-				code.addClass('is-unmasked');
-				setIcon(revealBtn, 'eye-off');
-				revealBtn.setAttribute('aria-label', 'Hide password');
-				revealBtn.setAttribute('title', 'Hide password');
+		const startHold = (e: Event) => {
+			e.preventDefault();
+			if (isHolding) return;
+			isHolding = true;
+			code.addClass('is-unmasked');
+			revealBtn.addClass('is-holding');
+			setIcon(revealBtn, 'eye-off');
+			revealBtn.setAttribute('aria-label', 'Release to hide password');
+			revealBtn.setAttribute('title', 'Release to hide password');
 
-				if (this.settings.autoHideDelay > 0) {
-					autoHideTimer = window.setTimeout(() => {
-						updateRevealState(false);
-					}, this.settings.autoHideDelay * 1000);
-				}
-			} else {
-				code.removeClass('is-unmasked');
-				setIcon(revealBtn, 'eye');
-				revealBtn.setAttribute('aria-label', 'Show password');
-				revealBtn.setAttribute('title', 'Show password');
+			if (safetyTimer !== null) {
+				window.clearTimeout(safetyTimer);
 			}
+			safetyTimer = window.setTimeout(() => {
+				endHold();
+			}, 30000);
+		};
+
+		const endHold = (e?: Event) => {
+			if (e) e.preventDefault();
+			if (!isHolding) return;
+			isHolding = false;
+			if (safetyTimer !== null) {
+				window.clearTimeout(safetyTimer);
+				safetyTimer = null;
+			}
+			code.removeClass('is-unmasked');
+			revealBtn.removeClass('is-holding');
+			setIcon(revealBtn, 'eye');
+			revealBtn.setAttribute('aria-label', 'Hold to see password');
+			revealBtn.setAttribute('title', 'Hold to see password');
 		};
 
 		const revealBtn = actions.createEl('button', {
 			cls: 'password-codeblock-btn password-reveal-btn',
-			attr: { 'aria-label': 'Show password', 'title': 'Show password' },
+			attr: {
+				'aria-label': 'Hold to see password',
+				title: 'Hold to see password',
+			},
 		});
 		setIcon(revealBtn, 'eye');
-		revealBtn.addEventListener('click', (e) => {
-			e.preventDefault();
-			updateRevealState(!isExplicitlyUnmasked);
+
+		revealBtn.addEventListener('pointerdown', startHold);
+		revealBtn.addEventListener('pointerup', endHold);
+		revealBtn.addEventListener('pointerleave', endHold);
+		revealBtn.addEventListener('pointercancel', endHold);
+
+		revealBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+			if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+				startHold(e);
+			}
 		});
+		revealBtn.addEventListener('keyup', (e: KeyboardEvent) => {
+			if (e.key === ' ' || e.key === 'Enter') {
+				endHold(e);
+			}
+		});
+		revealBtn.addEventListener('blur', () => endHold());
+		revealBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
 		if (this.settings.showCopyButton) {
 			const copyBtn = actions.createEl('button', {
 				cls: 'password-codeblock-btn password-copy-btn',
-				attr: { 'aria-label': 'Copy password', 'title': 'Copy password' },
+				attr: {
+					'aria-label': 'Copy password',
+					title: 'Copy password',
+				},
 			});
 			setIcon(copyBtn, 'copy');
 			copyBtn.addEventListener('click', async (e) => {
@@ -289,7 +436,9 @@ class PasswordCodeBlockSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Mask in Reading View')
-			.setDesc('Mask password codeblocks in Reading View and rendered previews.')
+			.setDesc(
+				'Always mask password codeblocks in Reading View and rendered previews. Hold the eye icon to see.'
+			)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.enableReadingMask)
@@ -302,25 +451,14 @@ class PasswordCodeBlockSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Mask in Edit View')
-			.setDesc('Mask passwords in Edit Mode (Live Preview and Source Mode).')
+			.setDesc(
+				'Always mask passwords in Edit Mode (Live Preview and Source Mode). Hold the eye icon next to ```pw to see.'
+			)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.enableEditMask)
 					.onChange(async (value) => {
 						this.plugin.settings.enableEditMask = value;
-						await this.plugin.saveSettings();
-						this.plugin.applySettingsUpdate();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName('Reveal on hover')
-			.setDesc('Temporarily unmask the password when the mouse hovers over it.')
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.revealOnHover)
-					.onChange(async (value) => {
-						this.plugin.settings.revealOnHover = value;
 						await this.plugin.saveSettings();
 						this.plugin.applySettingsUpdate();
 					})
@@ -336,22 +474,6 @@ class PasswordCodeBlockSettingTab extends PluginSettingTab {
 						this.plugin.settings.showCopyButton = value;
 						await this.plugin.saveSettings();
 						this.plugin.applySettingsUpdate();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName('Auto-hide timeout')
-			.setDesc(
-				'Automatically re-mask the password after this many seconds when toggled visible (0 to disable).'
-			)
-			.addSlider((slider) =>
-				slider
-					.setLimits(0, 30, 1)
-					.setValue(this.plugin.settings.autoHideDelay)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.autoHideDelay = value;
-						await this.plugin.saveSettings();
 					})
 			);
 	}

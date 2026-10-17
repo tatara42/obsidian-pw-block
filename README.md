@@ -8,11 +8,11 @@ Mask sensitive passwords and tokens inside notes, protecting against shoulder-su
 
 ## Features
 
-- 🔒 **Visual Masking in Reading View**: Code blocks formatted with `pw` or `password` are masked as bullets (`••••••`).
+- 🔒 **Always Hidden by Default**: Code blocks formatted with `pw` or `password` are always masked as bullets (`••••••`).
 - ✍️ **Hidden Even in Edit Mode**: Integrates with CodeMirror 6 to mask passwords in both **Live Preview** and **Source Mode**.
-- 👁️ **Hover-to-Reveal**: Hover mouse over the code block or editor line to temporarily reveal the plaintext password.
-- 📱 **Click / Tap to Reveal**: Toggle visibility on touch devices (iOS/Android) with an eye icon button, complete with optional auto-hide timeout.
-- 📋 **1-Click Copy**: Copy the real, unmasked password directly to your clipboard.
+- 👁️ **Hold to Reveal**: Press and hold the eye button (`👁️`) to see the password. As soon as you release your hold, the password is immediately re-masked.
+- 📱 **Mobile & Touch Friendly**: Seamlessly works on mouse clicks, touchscreens (iOS/Android), and keyboard (Space/Enter).
+- 📋 **1-Click Copy**: Copy the real, unmasked password directly to your clipboard without exposing it on screen.
 - 🎨 **Theme-Native**: Built with Obsidian design tokens for light and dark themes.
 
 ---
@@ -36,15 +36,16 @@ DATABASE_URL=postgres://user:pass@localhost:5432/db
 ```
 ````
 
+- **In Reading View & Rendered Previews**: Press and hold the eye button in the code block header to reveal the password. Releasing the hold re-masks it instantly.
+- **In Edit Mode (Live Preview & Source Mode)**: Press and hold the eye button attached to the ````pw```` fence line to reveal the password while editing. Releasing re-masks it instantly.
+
 ---
 
 ## Settings
 
 - **Mask in Reading View**: Toggle masking on/off for Reading View and rendered previews.
 - **Mask in Edit View**: Toggle masking on/off for Live Preview and Source Mode.
-- **Reveal on hover**: Temporarily unmask the password when hovered with the mouse.
 - **Show copy button**: Show/hide the 1-click clipboard copy button.
-- **Auto-hide timeout**: Set the duration in seconds before a revealed password automatically re-masks (0 to disable).
 
 ---
 
