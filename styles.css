@@ -1,0 +1,141 @@
+/* ==========================================================================
+   Obsidian Password Codeblock Plugin Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Reading View / Rendered Codeblock
+   -------------------------------------------------------------------------- */
+.password-codeblock-container {
+  margin: 1em 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 6px);
+  background-color: var(--background-secondary);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.password-codeblock-container:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.password-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background-color: var(--background-secondary-alt);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-smaller, 0.8rem);
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.password-codeblock-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.password-codeblock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.password-codeblock-icon svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.password-codeblock-title {
+  color: var(--text-muted);
+}
+
+.password-codeblock-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.password-codeblock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-s, 4px);
+  padding: 3px 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.password-codeblock-btn:hover {
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+.password-codeblock-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.password-codeblock-pre {
+  margin: 0 !important;
+  padding: 10px 14px !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow-x: auto;
+}
+
+.password-codeblock-code {
+  font-family: var(--font-monospace);
+  font-size: var(--code-size, 0.9em);
+  line-height: var(--line-height-normal, 1.5);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+/* Masking in Reading View */
+.password-codeblock-code.is-masked {
+  -webkit-text-security: disc;
+  letter-spacing: 0.12em;
+  transition: -webkit-text-security 0.15s ease, letter-spacing 0.15s ease;
+}
+
+/* Reveal on hover when enabled */
+body.pw-reveal-on-hover .password-codeblock-container.reveal-on-hover:hover .password-codeblock-code.is-masked {
+  -webkit-text-security: none;
+  letter-spacing: normal;
+}
+
+/* Explicitly unmasked via toggle button */
+.password-codeblock-code.is-unmasked {
+  -webkit-text-security: none !important;
+  letter-spacing: normal !important;
+}
+
+/* --------------------------------------------------------------------------
+   Edit View (CodeMirror 6 / Live Preview & Source Mode)
+   -------------------------------------------------------------------------- */
+.cm-password-masked {
+  -webkit-text-security: disc;
+  letter-spacing: 0.12em;
+  user-select: text;
+  transition: -webkit-text-security 0.15s ease, letter-spacing 0.15s ease;
+}
+
+/* Reveal on hover in Edit mode */
+body.pw-reveal-on-hover .cm-password-masked:hover,
+body.pw-reveal-on-hover .cm-password-line:hover .cm-password-masked {
+  -webkit-text-security: none;
+  letter-spacing: normal;
+}
